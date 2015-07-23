@@ -1,0 +1,251 @@
+<?php
+/**
+ * @file
+ * Mobile device favicon module.
+ *
+ * @author Gaydamaka Vladimir <vladimir.gaydamaka@ffwagency.com>
+ */
+
+define('MOBILE_DEVICE_FAVICON_MODULE_DIR', drupal_get_path('module', basename(__DIR__)));
+define('THEME_PATH', drupal_get_path('theme', variable_get('theme_default', '')));
+define('FAVICON_IMAGE_DIR', THEME_PATH . '/favicon/');
+define('FILE_EXTENSION', '.ico');
+define('BROWSER_CONFIG_FILE', 'browserconfig.xml');
+
+/**
+ * Implements hook_form_system_theme_settings_alter().
+ */
+function mobile_devices_favicon_form_system_theme_settings_alter(&$form, &$form_state) {
+  $device_dimensions = _mobile_devices_favicon_get_default_file_list();
+
+  $form['favicon']['mobile_device_favicon'] = array(
+    '#type' => 'vertical_tabs',
+    '#title' => t('favicon_api settings'),
+    '#default_tab' => 'windows',
+  );
+
+  foreach (array(
+    'windows' => array(
+      'title' => t('Windows OS settings'),
+    ),
+    'apple' => array(
+      'title' => t('iOS settings'),
+    ),
+  ) as $os => $param) {
+    $form[$os] = array(
+      '#type' => 'fieldset',
+      '#title' => $param['title'],
+      '#collapsible' => TRUE,
+      '#group' => 'mobile_device_favicon',
+    );
+
+    $form[$os]['favicon_' . $os . '_full_dimension'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Select one file for all dimensions'),
+      '#description' => t('Use one file for all dimension'),
+      '#default_value' => FALSE,
+    );
+
+    foreach ($device_dimensions[$os] as $title => $dimension) {
+      $description = t('In the folder "DEFAULT_THEME/favicon" should be located file !title.ico', array('!title' => $title));
+      _favicon_api_dimension_validate($title, $dimension);
+
+      $form[$os]['favicon_' . $os . '_' . $dimension] = array(
+        '#type' => 'checkbox',
+        '#title' => t('Exist favicon file with dimension !dimension', array('!dimension' => $dimension)),
+        '#description' => t('In the folder "DEFAULT_THEME/favicon" should be located file !title.ico', array('!title' => $title));,
+        '#default_value' => _favicon_api_file_exist($title, FILE_EXTENSION),
+        '#disabled' => TRUE,
+        '#states' => array(
+          'invisible' => array(
+            'input[name="favicon_' . $os . '_full_dimension"]' => array('checked' => TRUE),
+          ),
+        ),
+      );
+    }
+
+    $form[$os]['favicon' . $os . '_default_file'] = array(
+      '#type' => 'managed_file',
+      '#title' => t('Upload icon image'),
+      '#upload_validators' => array(
+        'file_validate_extensions' => array("ico"),
+      ),
+      '#upload_location' => 'public://',
+      '#description' => t('Upload an image'),
+      '#states' => array(
+        'invisible' => array(
+          'input[name="favicon_' . $os . '_full_dimension"]' => array('checked' => FALSE),
+        ),
+      ),
+    );
+  }
+
+  return $form;
+}
+
+/**
+ * Validate image dimension.
+ *
+ * @param string $filename
+ *   The name of file.
+ * @param string $min_dimensions
+ *   The dimension image.
+ *
+ * @return array
+ *   Return error messages.
+ */
+function _mobile_devices_favicon_dimension_validate($filename, $min_dimensions) {
+  $error = array();
+  $file = NULL;
+
+  if (_favicon_api_file_exist($filename, FILE_EXTENSION)) {
+    $file = file_get_contents(_mobile_devices_favicon_get_file_path($filename, FILE_EXTENSION);
+    $file = file_save_data($file, 'temporary://' . $filename . FILE_EXTENSION, FILE_EXISTS_RENAME);
+    $error = file_validate_image_resolution($file, 0, $min_dimensions);
+    file_delete($file, TRUE);
+  }
+
+  return $error;
+}
+
+/**
+ * Check exist file.
+ *
+ * @param string $filename
+ *   The name of file.
+ * @param string $extension
+ *   The extension of file.
+ *
+ * @return bool
+ *  Check file.
+ */
+function _mobile_devices_favicon_file_exist($filename, $extension) {
+  return file_exists(FAVICON_IMAGE_DIR . $filename  . $extension);
+}
+
+/**
+ * Get path to file.
+ *
+ * @param string $filename
+ *   The name of file.
+ *
+ * @return string
+ *  The path to file.
+ */
+function _mobile_devices_favicon_get_file_path($filename, $extension) {
+  return '/' . FAVICON_IMAGE_DIR . $filename . $extension;
+}
+
+/**
+ * Get path to files and name device dimensions.
+ *
+ * @return array
+ *   The path to files.
+ */
+function _mobile_devices_favicon_get_default_file_list() {
+  $device_dimensions = array();
+
+  foreach (array(
+    '310x310',
+    '310x150',
+    '150x150',
+    '70x70'
+  ) as $dimension) {
+    $device_dimensions['windows']["mstile_$dimension"] = $dimension;
+  }
+
+  foreach (array('ipad_', 'iphone_') as $key => $device) {
+    foreach (array(
+      'ios7_retina_' => array(
+        '152x152',
+        '120x120'
+      ),
+      'retina_' => array(
+        '144x144',
+        '114x114'
+      ),
+      'ios7_non_retina_' => array(
+        '76x76',
+        '60x60',
+      ),
+      'non_retina_' => array(
+        '72x72',
+        '57x57',
+      ),
+    ) as $screen => $dimensions)
+    $device_dimensions['apple'][$device . $screen . $dimensions[$key]] = $dimensions[$key];
+  }
+
+  return $device_dimensions;
+}
+
+/**
+ * Implements hook_html_head_alter().
+ */
+function mobile_devices_favicon_html_head_alter(&$head_elements) {
+  $device_dimensions = _favicon_api_get_default_file_list();
+  $browser_config = NULL;
+  $child  = NULL;
+  $save_xml = NULL;
+
+  foreach ($device_dimensions as $os => $dimensions) {
+    switch ($os) {
+      case 'windows':
+        if (NULL == cache_get(__FUNCTION__)) {
+          $browser_config = simplexml_load_file(MOBILE_DEVICE_FAVICON_MODULE_DIR . '/' . BROWSER_CONFIG_FILE);
+          $tile = $browser_config->msapplication->tile;
+
+          // Generate xml data.
+          foreach ($dimensions as $filename => $dimension) {
+            if (_favicon_api_file_exist($filename, FILE_EXTENSION)) {
+              switch ($dimension) {
+                case '310x150':
+                  $child = $tile->addChild('wide' . $dimension . 'logo');
+                  $child->addAttribute('src', _favicon_api_get_file_path($filename));
+                  break;
+
+                default:
+                  $child = $tile->addChild('square' . $dimension . 'logo');
+                  $child->addAttribute('src', _favicon_api_get_file_path($filename));
+                  break;
+              }
+            }
+          }
+
+          $save_xml = $browser_config->saveXML(file_create_url('public://' . BROWSER_CONFIG_FILE));
+
+          if (!empty($save_xml)) {
+            cache_set(__FUNCTION__, $dimensions);
+          }
+        }
+
+        if (file_exists(drupal_realpath('public://' . BROWSER_CONFIG_FILE))) {
+          $head_elements['msapplication_config'] = array(
+            '#tag' => 'meta',
+            '#attributes' => array(
+              'name' => 'msapplication-config',
+              'href' => file_create_url('public://' . BROWSER_CONFIG_FILE),
+            ),
+            '#type' => 'html_tag',
+          );
+        }
+        break;
+
+      case 'apple':
+        foreach ($dimensions as $filename => $dimension) {
+          if (_favicon_api_file_exist($filename, FILE_EXTENSION)) {
+            $head_elements[$filename] = array(
+              '#tag' => 'link',
+              '#attributes' => array(
+                'rel' => 'apple-touch-icon',
+                'href' => _favicon_api_get_file_path($filename),
+                'size' => $dimension,
+              ),
+              '#type' => 'html_tag',
+            );
+          }
+        }
+        break;
+    }
+  }
+}
