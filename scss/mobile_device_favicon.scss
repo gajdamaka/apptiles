@@ -1,0 +1,73 @@
+#edit-windows,
+#edit-apple {
+  .form-type-checkbox {
+    input {
+      display: none;
+    }
+    // Radio button size should be divisible by 5.
+    $size: 20px;
+    label {
+      position: relative;
+      padding-left: $size + 5;
+      font-size: 14px;
+      line-height: $size;
+
+      &:before,
+      &:after {
+        content: '';
+        position: absolute;
+        border-radius: 50%;
+      }
+      &:before {
+        opacity: 0;
+        background: #00bf00;
+        width: 14px;
+        height: 14px;
+        top: 3px;
+        left: 3px;
+      }
+      &:after {
+        border: 1px solid #3b6eb7;
+        //@include box-sizing;
+        width: $size;
+        height: $size;
+        top: 0;
+        left: 0;
+        //@include vendor-values(box-shadow, inset 0 1px 1px white, 0 1px 3px rgba(0, 0, 0, .5), webkit);
+      }
+    }
+    &:not(.form-disabled) {
+      label {
+        &:hover::before {
+          opacity: .3;
+        }
+      }
+    }
+    &.form-disabled {
+      label {
+        &:before {
+          opacity: .3;
+        }
+      }
+    }
+    .red + label {
+      &:before {
+        background: #FF0000;
+      }
+    }
+    input:checked + label:before {
+      opacity: 1;
+    }
+    .description {
+      margin-left: 27px;
+    }
+  }
+  .form-type-checkbox {
+    label {
+      &:before,
+      &:after {
+        border-radius: 0;
+      }
+    }
+  }
+}
