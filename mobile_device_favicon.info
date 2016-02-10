@@ -1,7 +1,0 @@
-name = Mobile device favicon
-description = Display favicon on different mobile devices
-package = Custom
-
-version = 7.x
-core = 7.x
-php = 5.3
