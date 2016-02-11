@@ -8,7 +8,9 @@
 
 define('VARIOUS_FAVICON_MODULE_DIR', drupal_get_path('module', basename(__DIR__)));
 define('VARIOUS_FAVICON_THEME_NAME', variable_get('theme_default', ''));
+// The folder in which the favicon should be located.
 define('VARIOUS_FAVICON_FAVICON_IMAGE_DIR', drupal_get_path('theme', VARIOUS_FAVICON_THEME_NAME) . '/favicon/');
+// The name of the configuration file to display favicon on windows device.
 define('VARIOUS_FAVICON_BROWSER_CONFIG_FILE', 'browserconfig.xml');
 define('VARIOUS_FAVICON_FILE_EXTENSION', 'png');
 
@@ -113,6 +115,7 @@ function various_favicon_form_system_theme_settings_alter(array &$form, array &$
  */
 function various_favicon_flush_caches() {
   $disabled = theme_get_setting('favicon_windows', VARIOUS_FAVICON_THEME_NAME);
+
   if (0 === $disabled && file_exists(VARIOUS_FAVICON_MODULE_DIR . '/' . VARIOUS_FAVICON_BROWSER_CONFIG_FILE)) {
     $browser_config = simplexml_load_file(VARIOUS_FAVICON_MODULE_DIR . '/' . VARIOUS_FAVICON_BROWSER_CONFIG_FILE);
     $background = theme_get_setting('background', VARIOUS_FAVICON_THEME_NAME);
@@ -286,7 +289,7 @@ function _various_favicon_file_validate($filename, $min_dimensions) {
         $errors[] = t('File must have extension !extension', ['!extension' => VARIOUS_FAVICON_FILE_EXTENSION]);
       }
 
-      if ($info['width'] < $width && $info['height'] < $height) {
+      if ($info['width'] === $width && $info['height'] === $height) {
         $errors[] = t('The minimum dimensions are %dimensions pixels.', ['!dimensions' => $min_dimensions]);
       }
     }
