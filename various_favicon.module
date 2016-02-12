@@ -159,15 +159,41 @@ function various_favicon_html_head_alter(array &$head_elements) {
     if (0 === $disabled) {
       switch ($device) {
         case 'windows':
-          if (file_exists(drupal_realpath('public://' . VARIOUS_FAVICON_BROWSER_CONFIG_FILE))) {
-            $head_elements['msapplication_config'] = array(
+          $filename = 'mstile-144x144';
+          $background = theme_get_setting('background', VARIOUS_FAVICON_THEME_NAME);
+          $errors = _various_favicon_file_validate($filename, $dimensions[$filename]);
+
+          if (_various_favicon_file_exist($filename) && empty($errors)) {
+            $head_elements['windows_default_config'] = [
               '#type' => 'html_tag',
               '#tag' => 'meta',
-              '#attributes' => array(
+              '#attributes' => [
+                'name' => 'msapplication-TileImage',
+                'href' => file_create_url(_various_favicon_get_file_path($filename)),
+              ],
+            ];
+          }
+
+          if (!empty($background)) {
+            $head_elements['windows_default_background'] = [
+              '#type' => 'html_tag',
+              '#tag' => 'meta',
+              '#attributes' => [
+                'name' => 'msapplication-TileColor',
+                'content' => "#$background",
+              ],
+            ];
+          }
+
+          if (file_exists(drupal_realpath('public://' . VARIOUS_FAVICON_BROWSER_CONFIG_FILE))) {
+            $head_elements['msapplication_config'] = [
+              '#type' => 'html_tag',
+              '#tag' => 'meta',
+              '#attributes' => [
                 'name' => 'msapplication-config',
-                'href' => file_create_url('public://' . VARIOUS_FAVICON_BROWSER_CONFIG_FILE),
-              ),
-            );
+                'content' => file_create_url('public://' . VARIOUS_FAVICON_BROWSER_CONFIG_FILE),
+              ],
+            ];
           }
           break;
 
@@ -182,7 +208,7 @@ function various_favicon_html_head_alter(array &$head_elements) {
                 '#attributes' => [
                   'rel' => 'apple-touch-icon',
                   'href' => file_create_url(_various_favicon_get_file_path($filename)),
-                  'size' => $dimension,
+                  'sizes' => $dimension,
                 ],
               ];
             }
@@ -208,33 +234,25 @@ function _various_favicon_get_default_file_list($type = 'all') {
   foreach ([
     '70x70',
     '150x150',
+    '144x144',
     '310x150',
     '310x310',
   ] as $dimension) {
-    $device_dimensions['windows']["mstile_$dimension"] = $dimension;
+    $device_dimensions['windows']["mstile-$dimension"] = $dimension;
   }
 
-  foreach (['ipad', 'iphone'] as $key => $device) {
-    foreach ([
-      'ios7_retina' => [
-        '120x120',
-        '152x152',
-      ],
-      'retina' => [
-        '114x114',
-        '144x144',
-      ],
-      'ios7_non_retina' => [
-        '60x60',
-        '76x76',
-      ],
-      'non_retina' => [
-        '57x57',
-        '72x72',
-      ],
-    ] as $screen => $dimensions) {
-      $device_dimensions['apple'][$device . '_' . $screen . '_' . $dimensions[$key]] = $dimensions[$key];
-    }
+  foreach ([
+    '57x57',
+    '60x60',
+    '72x72',
+    '76x76',
+    '114x114',
+    '120x120',
+    '144x144',
+    '152x152',
+    '180x180',
+  ] as $dimension) {
+    $device_dimensions['apple']["apple-touch-icon-$dimension"] = $dimension;
   }
 
   return 'all' === $type ? $device_dimensions : (!empty($device_dimensions[$type]) ? $device_dimensions[$type] : []);
