@@ -1,0 +1,268 @@
+<?php
+/**
+ * @file
+ * Application Tiles.
+ */
+
+define('APPTILES_BROWSERCONFIG', 'public://browserconfig.xml');
+define('APPTILES_IMAGE_EXTENSION', 'png');
+
+/**
+ * Implements hook_html_head_alter().
+ */
+function apptiles_html_head_alter(array &$head_elements) {
+  $tiles = apptiles_urls();
+
+  $metatag = function ($name, $content) use (&$head_elements) {
+    $head_elements[$name] = [
+      '#tag' => 'meta',
+      '#type' => 'html_tag',
+      '#attributes' => [
+        'name' => $name,
+        'content' => $content,
+      ],
+    ];
+  };
+
+  $link = function ($rel, $href, array $attributes = []) use (&$head_elements) {
+    $head_elements["$rel-$href"] = [
+      '#tag' => 'link',
+      '#type' => 'html_tag',
+      '#attributes' => $attributes + [
+          'rel' => $rel,
+          'href' => $href,
+        ],
+    ];
+  };
+
+  $metatag('application-name', variable_get('site_name'));
+  $metatag('mobile-web-app-capable', 'yes');
+
+  if (file_exists(APPTILES_BROWSERCONFIG)) {
+    $metatag('msapplication-config', file_create_url(APPTILES_BROWSERCONFIG));
+  }
+
+  // @see https://developer.chrome.com/multidevice/android/installtohomescreen
+  foreach ($tiles['android'] as $file) {
+    $link('icon', $file, ['type' => 'image/png']);
+  }
+
+  // @see https://developer.apple.com/library/ios/documentation/AppleApplications/Reference/SafariWebContent/ConfiguringWebApplications/ConfiguringWebApplications.html
+  foreach ($tiles['ios'] as $file) {
+    $link('apple-touch-icon', $file);
+  }
+}
+
+/**
+ * Implements hook_flush_caches().
+ */
+function apptiles_flush_caches() {
+  $tiles = apptiles_urls();
+  $browserconfig = simplexml_load_file(drupal_get_path('module', 'apptiles') . '/' . basename(APPTILES_BROWSERCONFIG));
+  $settings = (array) theme_get_setting('msapplication', variable_get('theme_default')) + [
+    'tile' => [],
+    'notification' => [],
+  ];
+
+  // @link https://msdn.microsoft.com/en-us/library/dn455106(v=vs.85).aspx
+  foreach ($tiles['windows'] as $dimension => $file) {
+    list($width, $height) = explode('x', $dimension);
+
+    $settings['tile'][($width > $height ? 'wide' : 'square') . $dimension . 'logo'] = [
+      'src' => $file,
+    ];
+  }
+
+  foreach ($settings as $group => $elements) {
+    if (!empty($elements)) {
+      $browserconfig->msapplication->addChild($group);
+
+      foreach ($elements as $element => $data) {
+        $value = is_array($data) ? NULL : $data;
+        $browserconfig->msapplication->{$group}->addChild($element, $value);
+
+        if (NULL === $value) {
+          foreach ($data as $attribute => $value) {
+            $browserconfig->msapplication->{$group}->{$element}->addAttribute($attribute, $value);
+          }
+        }
+      }
+    }
+  }
+
+  $browserconfig->saveXML(APPTILES_BROWSERCONFIG);
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function apptiles_form_system_theme_settings_alter(array &$form) {
+  if ('theme_settings' === $form['var']['#value']) {
+    $path = apptiles_path();
+
+    $form['tiles'] = [
+      '#tree' => TRUE,
+      '#type' => 'fieldset',
+      '#title' => t('Application tiles'),
+      '#description' => t('The images (icons) of sizes, marked below, can be used for customizing your web-application.'),
+    ];
+
+    foreach (apptiles_tiles() as $os => $dimensions) {
+      $form['tiles'][$os] = [
+        '#type' => 'item',
+        '#title' => strtoupper($os),
+        '#description' => t('Put images to: !path. File name - is dimension. Extension - !extension.', [
+          '!path' => "<strong>$path/$os</strong>",
+          '!extension' => '<strong>' . APPTILES_IMAGE_EXTENSION . '</strong>'
+        ]),
+      ];
+
+      foreach ($dimensions as $dimension => $file) {
+        $form['tiles'][$os][$dimension] = [
+          '#type' => 'checkbox',
+          '#title' => pathinfo($file, PATHINFO_FILENAME),
+          '#disabled' => TRUE,
+          '#default_value' => file_exists($file),
+        ];
+      }
+    }
+
+    $form['tiles']['generate'] = [
+      '#type' => 'fieldset',
+      '#title' => t('Generate'),
+      '#collapsed' => TRUE,
+      '#collapsible' => TRUE,
+      '#description' => t('Generate icons of all sizes using uploaded source.'),
+    ];
+
+    $form['tiles']['generate']['file'] = [
+      '#type' => 'file',
+      '#tilte' => t('Generate tiles from file'),
+      '#access' => function_exists('image_scale_and_crop'),
+    ];
+
+    $form['tiles']['generate']['generate'] = [
+      '#type' => 'submit',
+      '#value' => t('Generate'),
+      '#submit' => ['apptiles_generate_submit'],
+      '#validate' => ['apptiles_generate_validate']
+    ];
+
+    $form['#attached']['css'][] = [
+      'type' => 'inline',
+      'data' => '#edit-tiles .form-type-checkbox {display: inline-block}',
+    ];
+  }
+}
+
+function apptiles_generate_validate(array &$form, array &$form_state) {
+  $destination = 'public://apptiles';
+  $parents = ['tiles', 'generate', 'file'];
+
+  if (empty($_FILES['files']['tmp_name']['tiles'])) {
+    form_set_error(implode('][', $parents), t('Unable to generate icons without source file.'));
+  }
+  else {
+    $image = image_load($_FILES['files']['tmp_name']['tiles']);
+
+    if (FALSE === $image) {
+      form_set_error(implode('][', $parents), t('Incorrect image has been uploaded.'));
+    }
+    else {
+      if (APPTILES_IMAGE_EXTENSION !== $image->info['extension']) {
+        form_set_error(implode('][', $parents), t('An extension of file must be: @extension', [
+          '@extension' => APPTILES_IMAGE_EXTENSION,
+        ]));
+      }
+      elseif (file_prepare_directory($destination, FILE_CREATE_DIRECTORY)) {
+        $uri = file_unmanaged_move($image->source, "{$destination}/tile.{$image->info['extension']}", FILE_EXISTS_REPLACE);
+
+        if (FALSE === $uri) {
+          form_set_error(implode('][', $parents));
+        }
+        else {
+          $image->source = $uri;
+
+          $form_state['apptiles'] = [
+            'image' => $image,
+            'destination' => $destination,
+          ];
+        }
+      }
+    }
+  }
+}
+
+function apptiles_generate_submit(array &$form, array &$form_state) {
+  $options = $form_state['apptiles'];
+  $base = apptiles_path();
+
+  foreach (apptiles_tiles() as $os => $dimensions) {
+    foreach ($dimensions as $dimension => $path) {
+      list($width, $height) = explode('x', $dimension);
+
+      // Need to re-save the value because type is \stdClass
+      // which is modified inside of image_scale_and_crop().
+      $image = $options['image'];
+
+      if (image_scale_and_crop($image, $width, $height)) {
+        $destination = $options['destination'] . str_replace($base, '', $path);
+        $directory = dirname($destination);
+
+        file_prepare_directory($directory, FILE_CREATE_DIRECTORY) && image_save($image, $destination);
+      }
+    }
+  }
+
+  file_unmanaged_delete($options['image']->source);
+}
+
+function apptiles_path() {
+  static $theme_path = '';
+
+  if ('' === $theme_path) {
+    $theme_path = drupal_get_path('theme', variable_get('theme_default'));
+  }
+
+  return "$theme_path/tiles";
+}
+
+/**
+ * @return array[]
+ */
+function apptiles_tiles() {
+  static $settings = [];
+
+  if (empty($settings)) {
+    $path = apptiles_path();
+
+    foreach ([
+      'android' => ['96x96', '192x192', '194x194'],
+      'windows' => ['70x70', '150x150', '310x150', '310x310'],
+      'ios' => ['57x57', '60x60', '72x72', '76x76', '114x114', '120x120', '144x144', '152x152', '180x180'],
+    ] as $os => $dimensions) {
+      foreach ($dimensions as $dimension) {
+        $settings[$os][$dimension] = "$path/$os/$dimension." . APPTILES_IMAGE_EXTENSION;
+      }
+    }
+  }
+
+  return $settings;
+}
+
+/**
+ * @return array[]
+ */
+function apptiles_urls() {
+  $settings = [];
+
+  foreach (apptiles_tiles() as $os => $dimensions) {
+    $settings[$os] = [];
+
+    foreach (array_filter($dimensions, 'file_exists') as $dimension => $file) {
+      $settings[$os][$dimension] = url($file, ['absolute' => TRUE]);
+    }
+  }
+
+  return $settings;
+}
