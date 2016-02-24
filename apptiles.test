@@ -1,0 +1,103 @@
+<?php
+/**
+ * @file
+ * Application Tiles (Test).
+ */
+
+/**
+ * Class AppTilesTestCase.
+ */
+class AppTilesTestCase extends \DrupalWebTestCase {
+
+  /**
+   * Test module.
+   */
+  const MODULE = 'apptiles';
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return [
+      'name' => 'Application Tiles',
+      'group' => t('Utilities'),
+      'description' => t('Testing functionality of Application Tiles module.'),
+    ];
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp() {
+    parent::setUp(self::MODULE);
+  }
+
+  /**
+   * Testing correctness of generated browserconfig.xml.
+   */
+  public function testBrowserConfigGeneration() {
+    $this->recreateBrowserConfig([
+      'tile' => [
+        'TileColor' => '#333',
+      ],
+      'notification' => [
+        'cycle' => 4,
+        'frequency' => 20,
+        'polling-uri' => ['src' => '/public-rss.xml'],
+      ],
+    ]);
+  }
+
+  /**
+   * @todo Comment me!
+   * @todo Find a way to test metatags.
+   */
+  public function testMetaTags() {
+
+  }
+
+  /**
+   * @todo Comment me!
+   *
+   * @param array $settings
+   */
+  private function recreateBrowserConfig(array $settings) {
+    variable_set('theme_settings', ['msapplication' => $settings]);
+
+    $this->resetAll();
+
+    if ($this->assertTrue(file_exists(APPTILES_BROWSERCONFIG))) {
+      $this->recursiveSettingsAssertion($settings, simplexml_load_file(APPTILES_BROWSERCONFIG)->msapplication);
+    }
+    else {
+      $this->fail(sprintf('File %s does not exists.', APPTILES_BROWSERCONFIG));
+    }
+  }
+
+  /**
+   * @todo Comment me!
+   *
+   * @param array $settings
+   * @param \SimpleXMLElement $element
+   */
+  private function recursiveSettingsAssertion(array $settings, \SimpleXMLElement $element) {
+    foreach ($settings as $key => $value) {
+      if (is_array($value)) {
+        // R-r-recursive.
+        call_user_func(__METHOD__, $settings[$key], $element->{$key});
+      }
+      else {
+        if (isset($element->{$key})) {
+          // Assert child properties.
+          $this->assertTrue($settings[$key] == $element->{$key}, sprintf('Option %s is %s.', $settings[$key], $element->{$key}));
+        }
+        else {
+          // Assert attributes.
+          $attribute = $element->attributes()->{$key};
+          $this->assertTrue($attribute == $value, sprintf('Attribute %s is %s.', $attribute, $value));
+        }
+      }
+    }
+  }
+
+}
