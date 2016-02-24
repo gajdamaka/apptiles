@@ -127,27 +127,6 @@ function apptiles_form_system_theme_settings_alter(array &$form) {
       }
     }
 
-    $form['tiles']['generate'] = [
-      '#type' => 'fieldset',
-      '#title' => t('Generate'),
-      '#collapsed' => TRUE,
-      '#collapsible' => TRUE,
-      '#description' => t('Generate icons of all sizes using uploaded source.'),
-    ];
-
-    $form['tiles']['generate']['file'] = [
-      '#type' => 'file',
-      '#tilte' => t('Generate tiles from file'),
-      '#access' => function_exists('image_scale_and_crop'),
-    ];
-
-    $form['tiles']['generate']['generate'] = [
-      '#type' => 'submit',
-      '#value' => t('Generate'),
-      '#submit' => ['apptiles_generate_submit'],
-      '#validate' => ['apptiles_generate_validate']
-    ];
-
     $form['#attached']['css'][] = [
       'type' => 'inline',
       'data' => '#edit-tiles .form-type-checkbox {display: inline-block}',
@@ -155,68 +134,12 @@ function apptiles_form_system_theme_settings_alter(array &$form) {
   }
 }
 
-function apptiles_generate_validate(array &$form, array &$form_state) {
-  $destination = 'public://apptiles';
-  $parents = ['tiles', 'generate', 'file'];
-
-  if (empty($_FILES['files']['tmp_name']['tiles'])) {
-    form_set_error(implode('][', $parents), t('Unable to generate icons without source file.'));
-  }
-  else {
-    $image = image_load($_FILES['files']['tmp_name']['tiles']);
-
-    if (FALSE === $image) {
-      form_set_error(implode('][', $parents), t('Incorrect image has been uploaded.'));
-    }
-    else {
-      if (APPTILES_IMAGE_EXTENSION !== $image->info['extension']) {
-        form_set_error(implode('][', $parents), t('An extension of file must be: @extension', [
-          '@extension' => APPTILES_IMAGE_EXTENSION,
-        ]));
-      }
-      elseif (file_prepare_directory($destination, FILE_CREATE_DIRECTORY)) {
-        $uri = file_unmanaged_move($image->source, "{$destination}/tile.{$image->info['extension']}", FILE_EXISTS_REPLACE);
-
-        if (FALSE === $uri) {
-          form_set_error(implode('][', $parents));
-        }
-        else {
-          $image->source = $uri;
-
-          $form_state['apptiles'] = [
-            'image' => $image,
-            'destination' => $destination,
-          ];
-        }
-      }
-    }
-  }
-}
-
-function apptiles_generate_submit(array &$form, array &$form_state) {
-  $options = $form_state['apptiles'];
-  $base = apptiles_path();
-
-  foreach (apptiles_tiles() as $os => $dimensions) {
-    foreach ($dimensions as $dimension => $path) {
-      list($width, $height) = explode('x', $dimension);
-
-      // Need to re-save the value because type is \stdClass
-      // which is modified inside of image_scale_and_crop().
-      $image = $options['image'];
-
-      if (image_scale_and_crop($image, $width, $height)) {
-        $destination = $options['destination'] . str_replace($base, '', $path);
-        $directory = dirname($destination);
-
-        file_prepare_directory($directory, FILE_CREATE_DIRECTORY) && image_save($image, $destination);
-      }
-    }
-  }
-
-  file_unmanaged_delete($options['image']->source);
-}
-
+/**
+ * Get path to directory with application tiles.
+ *
+ * @return string
+ *   Path to directory.
+ */
 function apptiles_path() {
   static $theme_path = '';
 
@@ -228,7 +151,10 @@ function apptiles_path() {
 }
 
 /**
+ * Get all possible tiles variations.
+ *
  * @return array[]
+ *   Arrays, grouped by OS name and dimension.
  */
 function apptiles_tiles() {
   static $settings = [];
@@ -251,7 +177,10 @@ function apptiles_tiles() {
 }
 
 /**
+ * Get absolute links for existing tiles.
+ *
  * @return array[]
+ *   Arrays, grouped by OS name and dimension.
  */
 function apptiles_urls() {
   $settings = [];
