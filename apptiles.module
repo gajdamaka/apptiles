@@ -127,6 +127,12 @@ function apptiles_form_system_theme_settings_alter(array &$form) {
       }
     }
 
+    // @todo Add description about settings in theme *.info file.
+    // settings[msapplication][tile][TileColor] = #444
+    // settings[msapplication][notification][cycle] = 1
+    // settings[msapplication][notification][frequency] = 30
+    // settings[msapplication][notification][polling-uri][src] = /rss.xml
+
     $form['#attached']['css'][] = [
       'type' => 'inline',
       'data' => '#edit-tiles .form-type-checkbox {display: inline-block}',

@@ -1,5 +1,5 @@
 name = Application Tiles
-description = ''
+description = @todo
 core = 7.x
 php = 5.4
 
