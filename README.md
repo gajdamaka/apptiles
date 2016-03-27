@@ -27,4 +27,4 @@ Customization favicon.
  >
  > settings[msapplication][notification][polling-uri][src] = /rss.xml
 
-The values that can take these settings can be found[here](https://msdn.microsoft.com/en-us/library/dn455106(v=vs.85).aspx)
+The values that can take these settings can be found [here](https://msdn.microsoft.com/en-us/library/dn455106(v=vs.85).aspx)
