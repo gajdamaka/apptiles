@@ -29,9 +29,9 @@ function apptiles_html_head_alter(array &$head_elements) {
       '#tag' => 'link',
       '#type' => 'html_tag',
       '#attributes' => $attributes + [
-          'rel' => $rel,
-          'href' => $href,
-        ],
+        'rel' => $rel,
+        'href' => $href,
+      ],
     ];
   };
 
@@ -126,12 +126,6 @@ function apptiles_form_system_theme_settings_alter(array &$form) {
         ];
       }
     }
-
-    // @todo Add description about settings in theme *.info file.
-    // settings[msapplication][tile][TileColor] = #444
-    // settings[msapplication][notification][cycle] = 1
-    // settings[msapplication][notification][frequency] = 30
-    // settings[msapplication][notification][polling-uri][src] = /rss.xml
 
     $form['#attached']['css'][] = [
       'type' => 'inline',

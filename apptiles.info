@@ -3,6 +3,6 @@ description = @todo
 core = 7.x
 php = 5.4
 
-files[] = apptiles.test
+files[] = tests/apptiles.test
 
 configure = admin/appearance/settings
