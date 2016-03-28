@@ -30,9 +30,9 @@ function apptiles_html_head_alter(array &$head_elements) {
       '#tag' => 'link',
       '#type' => 'html_tag',
       '#attributes' => $attributes + [
-          'rel' => $rel,
-          'href' => $href,
-        ],
+        'rel' => $rel,
+        'href' => $href,
+      ],
     ];
   };
 

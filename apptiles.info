@@ -1,6 +1,8 @@
 name = Application Tiles
-description = Different tiles for applications
+description = Configure tiles for your web application.
 core = 7.x
 php = 5.4
+
+files[] = tests/apptiles.test
 
 configure = admin/appearance/settings

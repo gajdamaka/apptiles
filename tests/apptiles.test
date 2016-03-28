@@ -1,0 +1,193 @@
+<?php
+/**
+ * @file
+ * Application Tiles (Test).
+ */
+
+/**
+ * Class AppTilesTestCase.
+ */
+class AppTilesTestCase extends \DrupalWebTestCase {
+
+  /**
+   * Test module.
+   */
+  const MODULE = 'apptiles';
+
+  /**
+   * Path to files and directories for removal.
+   *
+   * @var array[]
+   */
+  private $temporary = [
+    'files' => [],
+    'directories' => [],
+  ];
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function getInfo() {
+    return [
+      'name' => 'Application Tiles',
+      'group' => t('Utilities'),
+      'description' => t('Testing functionality of Application Tiles module.'),
+    ];
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setUp() {
+    parent::setUp(static::MODULE);
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function tearDown() {
+    // First of all need to remove all temporary files.
+    array_map('unlink', $this->temporary['files']);
+
+    // Then, if directory is empty, - remove it.
+    foreach ($this->temporary['directories'] as $directory) {
+      // Check for "2" because every directory contains
+      // at lease two items: "." and "..".
+      if (count(scandir($directory)) === 2) {
+        rmdir($directory);
+      }
+    }
+
+    parent::tearDown();
+  }
+
+  /**
+   * Testing correctness of generated browserconfig.xml.
+   *
+   * @param array $settings
+   *   Configurations for browserconfig.xml.
+   */
+  public function testBrowserConfig($settings = [
+    'tile' => [
+      'TileColor' => '#333',
+    ],
+    'notification' => [
+      'cycle' => 4,
+      'frequency' => 20,
+      'polling-uri' => ['src' => '/public-rss.xml'],
+    ],
+  ]) {
+    variable_set('theme_settings', ['msapplication' => $settings]);
+
+    $this->resetAll();
+
+    if ($this->assertTrue(file_exists(APPTILES_BROWSERCONFIG))) {
+      $this->recursiveSettingsAssertion($settings, simplexml_load_file(APPTILES_BROWSERCONFIG)->msapplication);
+    }
+    else {
+      $this->fail(sprintf('File %s does not exists.', APPTILES_BROWSERCONFIG));
+    }
+  }
+
+  /**
+   * Testing meta tags on the homepage.
+   */
+  public function testMetaTags() {
+    $destination = apptiles_path();
+    $this->copyTemporaryFiles(__DIR__ . '/tiles', $destination);
+    // Visit homepage to have HTML markup.
+    $this->drupalGet('/user');
+    // MUST be called after files are present inside of active theme.
+    $tiles = apptiles_urls();
+    // Cannot continue without files.
+    $this->assertTrue(!empty($tiles), t('No tiles found!'));
+
+    // No need to check tiles for Windows because they
+    // are configured inside of browserconfig.xml.
+    unset($tiles['windows']);
+
+    // Walk through existing tiles only.
+    foreach ($tiles as $os => $dimensions) {
+      foreach ($dimensions as $dimension => $url) {
+        $this->assertTrue(strpos($this->content, $url) !== FALSE, t('Metatag for "@os" OS with "@dimension" exists on the page.', [
+          '@os' => $os,
+          '@dimension' => $dimension,
+        ]));
+      }
+    }
+
+    // Remove the directory if it is empty.
+    $this->temporary['directories'][] = $destination;
+  }
+
+  /**
+   * @todo Comment me!
+   *
+   * @param array $settings
+   * @param \SimpleXMLElement $element
+   */
+  private function recursiveSettingsAssertion(array $settings, \SimpleXMLElement $element) {
+    foreach ($settings as $key => $value) {
+      if (is_array($value)) {
+        // R-r-recursive.
+        call_user_func(__METHOD__, $settings[$key], $element->{$key});
+      }
+      else {
+        if (isset($element->{$key})) {
+          // Assert child properties.
+          $this->assertTrue($settings[$key] == $element->{$key}, sprintf('Option %s is %s.', $settings[$key], $element->{$key}));
+        }
+        else {
+          // Assert attributes.
+          $attribute = $element->attributes()->{$key};
+          $this->assertTrue($attribute == $value, sprintf('Attribute %s is %s.', $attribute, $value));
+        }
+      }
+    }
+  }
+
+  /**
+   * @todo Comment me!
+   *
+   * @param string $source
+   * @param string $destination
+   */
+  private function copyTemporaryFiles($source, $destination) {
+    /* @var \SplFileInfo $info */
+    foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($source, \FilesystemIterator::SKIP_DOTS)) as $path => $info) {
+      $directory = $destination . '/' . basename(dirname($path));
+
+      if (is_dir($directory)) {
+        $file = $directory . '/' . $info->getFilename();
+
+        // Ensure that directory has permissions to write.
+        if (!is_writable($directory)) {
+          $this->assertTrue(chmod($directory, 0755), t('Change access rights for "@destination".', [
+            '@destination' => $directory,
+          ]));
+        }
+
+        // Copy file only if it is not exists.
+        if (!file_exists($file)) {
+          $this->assertTrue(copy($path, $file), t('The "@source" file was copied to "@destination".', [
+            '@source' => $path,
+            '@destination' => $file,
+          ]));
+
+          // Store path to file for future clean up.
+          $this->temporary['files'][] = $file;
+        }
+      }
+      else {
+        // Create directory if it does not exists.
+        $this->assertTrue(mkdir($directory, 0755, TRUE), t('Created the "@directory" directory.', [
+          '@directory' => $directory,
+        ]));
+
+        // Store path to directory to not run recursive iterator in future.
+        $this->temporary['directories'][] = $directory;
+      }
+    }
+  }
+
+}
