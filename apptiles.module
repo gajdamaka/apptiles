@@ -5,6 +5,7 @@
  */
 
 define('APPTILES_BROWSERCONFIG', 'public://browserconfig.xml');
+define('APPTILES_MANIFEST', 'public://manifest.json');
 define('APPTILES_IMAGE_EXTENSION', 'png');
 
 /**
@@ -42,14 +43,21 @@ function apptiles_html_head_alter(array &$head_elements) {
     $metatag('msapplication-config', file_create_url(APPTILES_BROWSERCONFIG));
   }
 
+  if (file_exists(APPTILES_MANIFEST)) {
+    $link('manifest', file_create_url(APPTILES_MANIFEST));
+  }
+
   // @see https://developer.chrome.com/multidevice/android/installtohomescreen
-  foreach ($tiles['android'] as $file) {
-    $link('icon', $file, ['type' => 'image/png']);
+  foreach ($tiles['android'] as $dimension => $file) {
+    $link('icon', $file, [
+      'type' => 'image/png',
+      'sizes' => $dimension,
+    ]);
   }
 
   // @see https://developer.apple.com/library/ios/documentation/AppleApplications/Reference/SafariWebContent/ConfiguringWebApplications/ConfiguringWebApplications.html
-  foreach ($tiles['ios'] as $file) {
-    $link('apple-touch-icon', $file);
+  foreach ($tiles['ios'] as $dimension => $file) {
+    $link('apple-touch-icon', $file, ['sizes' => $dimension]);
   }
 }
 
@@ -59,10 +67,13 @@ function apptiles_html_head_alter(array &$head_elements) {
 function apptiles_flush_caches() {
   $tiles = apptiles_urls();
   $browserconfig = simplexml_load_file(drupal_get_path('module', 'apptiles') . '/' . basename(APPTILES_BROWSERCONFIG));
+  $manifest = json_decode(file_get_contents(drupal_get_path('module', 'apptiles') . '/' . basename(APPTILES_MANIFEST)), TRUE);
+
   $settings = (array) theme_get_setting('msapplication', variable_get('theme_default')) + [
     'tile' => [],
     'notification' => [],
   ];
+
 
   // @link https://msdn.microsoft.com/en-us/library/dn455106(v=vs.85).aspx
   foreach ($tiles['windows'] as $dimension => $file) {
@@ -91,6 +102,23 @@ function apptiles_flush_caches() {
   }
 
   $browserconfig->saveXML(APPTILES_BROWSERCONFIG);
+
+  // @link https://developer.chrome.com/multidevice/android/installtohomescreen#supporting
+  if (!empty($manifest)) {
+    foreach ($manifest['icons'] as $index => &$icon) {
+      foreach ($tiles['android'] as $dimension => $file) {
+        if ($icon['sizes'] == $dimension) {
+          $icon['src'] = $file;
+        }
+      }
+
+      if (empty($icon['src'])) {
+        unset($manifest['icons'][$index]);
+      }
+    }
+
+    file_put_contents(APPTILES_MANIFEST, json_encode($manifest));
+  }
 }
 
 /**
@@ -163,7 +191,7 @@ function apptiles_tiles() {
     $path = apptiles_path();
 
     foreach ([
-      'android' => ['96x96', '192x192', '194x194'],
+      'android' => ['36x36', '48x48', '72x72', '96x96', '144x144', '192x192'],
       'windows' => ['70x70', '150x150', '310x150', '310x310'],
       'ios' => ['57x57', '60x60', '72x72', '76x76', '114x114', '120x120', '144x144', '152x152', '180x180'],
     ] as $os => $dimensions) {
